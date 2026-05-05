@@ -1,16 +1,21 @@
-name: Android APK Build & Release
+name: Android APK Build
 
 on:
   push:
-    branches: ["main"]
-    tags: ["v*"]
+    branches:
+      - main
+    tags:
+      - "v*"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
+    name: Build APK
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -19,38 +24,60 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: 17
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: 8.14.3
+          gradle-version: "8.10"
 
       - name: Build APKs
-        run: gradle clean assembleDebug assembleRelease
-
-      - name: Rename APKs for non-tag builds
-        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/ZaEditor-debug.apk
-          cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/ZaEditor-release.apk
+          gradle clean assembleDebug assembleRelease
+
+      - name: Show APK outputs
+        run: |
+          echo "APK files:"
+          find app/build/outputs/apk -type f -name "*.apk" -print
+
+      - name: Prepare artifact files
+        run: |
+          mkdir -p release-files
+          DEBUG_APK=$(find app/build/outputs/apk/debug -type f -name "*.apk" | head -n 1)
+          RELEASE_APK=$(find app/build/outputs/apk/release -type f -name "*.apk" | head -n 1)
+
+          if [ -z "$DEBUG_APK" ]; then
+            echo "Debug APK not found"
+            exit 1
+          fi
+
+          if [ -z "$RELEASE_APK" ]; then
+            echo "Release APK not found"
+            exit 1
+          fi
+
+          cp "$DEBUG_APK" release-files/ZaEditor-debug.apk
+          cp "$RELEASE_APK" release-files/ZaEditor-release.apk
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: apk-artifacts
-          path: |
-            app/build/outputs/apk/debug/*.apk
-            app/build/outputs/apk/release/*.apk
+          name: ZaEditor-APK
+          path: release-files/*.apk
+          if-no-files-found: error
 
-      - name: Rename release APK for tag
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+      - name: Prepare release APK for tag
+        if: startsWith(github.ref, 'refs/tags/v')
         run: |
-          TAG_NAME=${GITHUB_REF_NAME}
-          cp app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/ZaEditor-${TAG_NAME}.apk
+          TAG_NAME="${GITHUB_REF_NAME}"
+          cp release-files/ZaEditor-release.apk "release-files/ZaEditor-${TAG_NAME}.apk"
+          ls -lah release-files/
 
-      - name: Create GitHub Release
-        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+      - name: Create GitHub Release and upload APK
+        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: app/build/outputs/apk/release/ZaEditor-${{ github.ref_name }}.apk
+          name: Za Editor ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          files: release-files/ZaEditor-${{ github.ref_name }}.apk
+          fail_on_unmatched_files: true
