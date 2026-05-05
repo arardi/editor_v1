@@ -1,0 +1,13 @@
+*.apk
+*.aab
+*.jar
+*.keystore
+*.jks
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.zip
+**/build/
+.gradle/
+local.properties
