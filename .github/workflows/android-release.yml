@@ -7,6 +7,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Opsional. Isi contoh v1.0.1 jika ingin upload APK ke GitHub Release dari manual run."
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -33,51 +38,107 @@ jobs:
 
       - name: Build APKs
         run: |
+          set -e
           gradle clean assembleDebug assembleRelease
 
       - name: Show APK outputs
         run: |
-          echo "APK files:"
-          find app/build/outputs/apk -type f -name "*.apk" -print
+          set -e
+          echo "APK files generated:"
+          find app/build/outputs/apk -type f -name "*.apk" -print -exec ls -lh {} \;
 
-      - name: Prepare artifact files
+      - name: Determine release tag
+        id: release_vars
+        env:
+          INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
         run: |
+          set -e
+
+          RELEASE_TAG=""
+
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            RELEASE_TAG="${GITHUB_REF_NAME}"
+          fi
+
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${INPUT_RELEASE_TAG}" ]]; then
+            RELEASE_TAG="${INPUT_RELEASE_TAG}"
+          fi
+
+          echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+
+          if [[ -n "${RELEASE_TAG}" ]]; then
+            echo "Release tag: ${RELEASE_TAG}"
+          else
+            echo "No release tag. This run will only upload Actions artifact."
+          fi
+
+      - name: Prepare APK files
+        env:
+          RELEASE_TAG: ${{ steps.release_vars.outputs.release_tag }}
+        run: |
+          set -e
+
           mkdir -p release-files
-          DEBUG_APK=$(find app/build/outputs/apk/debug -type f -name "*.apk" | head -n 1)
-          RELEASE_APK=$(find app/build/outputs/apk/release -type f -name "*.apk" | head -n 1)
 
-          if [ -z "$DEBUG_APK" ]; then
-            echo "Debug APK not found"
+          DEBUG_APK="$(find app/build/outputs/apk/debug -type f -name "*.apk" | head -n 1)"
+          RELEASE_APK="$(find app/build/outputs/apk/release -type f -name "*.apk" | head -n 1)"
+
+          if [[ -z "${DEBUG_APK}" ]]; then
+            echo "::error::Debug APK not found"
             exit 1
           fi
 
-          if [ -z "$RELEASE_APK" ]; then
-            echo "Release APK not found"
+          if [[ -z "${RELEASE_APK}" ]]; then
+            echo "::error::Release APK not found"
             exit 1
           fi
 
-          cp "$DEBUG_APK" release-files/ZaEditor-debug.apk
-          cp "$RELEASE_APK" release-files/ZaEditor-release.apk
+          cp "${DEBUG_APK}" release-files/ZaEditor-debug.apk
+          cp "${RELEASE_APK}" release-files/ZaEditor-release.apk
 
-      - name: Upload APK artifacts
+          if [[ -n "${RELEASE_TAG}" ]]; then
+            cp "${RELEASE_APK}" "release-files/ZaEditor-${RELEASE_TAG}.apk"
+          fi
+
+          echo "Prepared files:"
+          ls -lah release-files/
+
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: ZaEditor-APK
           path: release-files/*.apk
           if-no-files-found: error
 
-      - name: Prepare release APK for tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Upload APK to GitHub Release
+        if: steps.release_vars.outputs.release_tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release_vars.outputs.release_tag }}
         run: |
-          TAG_NAME="${GITHUB_REF_NAME}"
-          cp release-files/ZaEditor-release.apk "release-files/ZaEditor-${TAG_NAME}.apk"
-          ls -lah release-files/
+          set -e
 
-      - name: Create GitHub Release and upload APK
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          name: Za Editor ${{ github.ref_name }}
-          tag_name: ${{ github.ref_name }}
-          files: release-files/ZaEditor-${{ github.ref_name }}.apk
-          fail_on_unmatched_files: true
+          APK_FILE="release-files/ZaEditor-${RELEASE_TAG}.apk"
+
+          if [[ ! -f "${APK_FILE}" ]]; then
+            echo "::error::Release APK file not found: ${APK_FILE}"
+            exit 1
+          fi
+
+          echo "Uploading APK to GitHub Release:"
+          echo "Tag: ${RELEASE_TAG}"
+          echo "APK: ${APK_FILE}"
+          ls -lah "${APK_FILE}"
+
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            echo "Release already exists. Uploading asset with --clobber..."
+            gh release upload "${RELEASE_TAG}" "${APK_FILE}" --clobber
+          else
+            echo "Release does not exist. Creating release and uploading APK..."
+            gh release create "${RELEASE_TAG}" "${APK_FILE}" \
+              --title "Za Editor ${RELEASE_TAG}" \
+              --notes "Automated APK release for Za Editor ${RELEASE_TAG}" \
+              --target "${GITHUB_SHA}"
+          fi
+
+          echo "Release upload completed."
