@@ -114,6 +114,7 @@ jobs:
         if: steps.release_vars.outputs.release_tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: arardi/editor_v1
           RELEASE_TAG: ${{ steps.release_vars.outputs.release_tag }}
         run: |
           set -e
@@ -126,19 +127,26 @@ jobs:
           fi
 
           echo "Uploading APK to GitHub Release:"
+          echo "Repository: ${GH_REPO}"
           echo "Tag: ${RELEASE_TAG}"
           echo "APK: ${APK_FILE}"
           ls -lah "${APK_FILE}"
 
-          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+          gh auth status --hostname github.com
+
+          if gh release view "${RELEASE_TAG}" --repo "${GH_REPO}" >/dev/null 2>&1; then
             echo "Release already exists. Uploading asset with --clobber..."
-            gh release upload "${RELEASE_TAG}" "${APK_FILE}" --clobber
+            gh release upload "${RELEASE_TAG}" "${APK_FILE}" --repo "${GH_REPO}" --clobber
           else
             echo "Release does not exist. Creating release and uploading APK..."
             gh release create "${RELEASE_TAG}" "${APK_FILE}" \
+              --repo "${GH_REPO}" \
               --title "Za Editor ${RELEASE_TAG}" \
               --notes "Automated APK release for Za Editor ${RELEASE_TAG}" \
               --target "${GITHUB_SHA}"
           fi
+
+          echo "Verifying uploaded release asset..."
+          gh release view "${RELEASE_TAG}" --repo "${GH_REPO}" --json tagName,name,assets
 
           echo "Release upload completed."
