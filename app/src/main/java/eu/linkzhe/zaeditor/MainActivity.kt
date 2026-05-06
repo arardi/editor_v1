@@ -408,6 +408,20 @@ class MainActivity : ComponentActivity() {
                 }
                 else -> false
             }
+            toolbar.addView(item)
+        }
+        updateToolSelection(toolbar)
+    }
+
+    private fun updateToolSelection(toolbar: LinearLayout) {
+        val selectedColor = ContextCompat.getColor(this, R.color.za_primary)
+        val normalColor = ContextCompat.getColor(this, R.color.za_text_secondary)
+        for (index in 0 until toolbar.childCount) {
+            val item = toolbar.getChildAt(index)
+            val color = if (index == selectedToolIndex) selectedColor else normalColor
+            item.findViewById<ImageView>(R.id.tool_icon).setColorFilter(color)
+            item.findViewById<TextView>(R.id.tool_label).setTextColor(color)
+            item.setBackgroundColor(Color.TRANSPARENT)
         }
         overlay.setOnTouchListener(dragListener)
         handle.setOnTouchListener(dragListener)
@@ -496,6 +510,42 @@ class MainActivity : ComponentActivity() {
         root.findViewById<TextView>(R.id.currentTimeText)?.text = TimelineView.formatTime(position)
         root.findViewById<TextView>(R.id.durationText)?.text = TimelineView.formatTime(duration)
         root.findViewById<ImageButton>(R.id.playPauseButton)?.setImageResource(
+            if (activePlayer.isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+        )
+    }
+
+    private fun showImportSheet() {
+        val dialog = Dialog(this)
+        val sheet = layoutInflater.inflate(R.layout.view_import_video_sheet, null, false)
+        sheet.findViewById<View>(R.id.import_video_action).setOnClickListener {
+            dialog.dismiss()
+            pickVideo()
+        }
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        dialog.setContentView(sheet)
+        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        dialog.window?.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT)
+        dialog.window?.setGravity(Gravity.BOTTOM)
+        dialog.show()
+        dialog.window?.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT)
+    }
+
+    private fun showExportDialog() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.export)
+            .setMessage(R.string.export_coming_soon)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
+    }
+
+    private fun updatePlaybackState() {
+        val root = container.getChildAt(0) ?: return
+        val activePlayer = player ?: return
+        val duration = if (activePlayer.duration > 0) activePlayer.duration else currentProject?.durationMs ?: 1L
+        val position = activePlayer.currentPosition.coerceAtLeast(0L)
+        root.findViewById<TimelineView>(R.id.timeline_view)?.setTimeline(duration, position)
+        root.findViewById<TextView>(R.id.time_label)?.text = "${TimelineView.formatTime(position)} / ${TimelineView.formatTime(duration)}"
+        root.findViewById<ImageButton>(R.id.play_pause_button)?.setImageResource(
             if (activePlayer.isPlaying) R.drawable.ic_pause else R.drawable.ic_play
         )
     }
