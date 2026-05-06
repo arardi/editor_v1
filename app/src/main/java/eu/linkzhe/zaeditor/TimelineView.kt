@@ -24,8 +24,17 @@ class TimelineView @JvmOverloads constructor(
     private val labelPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val trackRect = RectF()
 
-    private var durationMs: Long = 1L
-    private var positionMs: Long = 0L
+    var durationMs: Long = 1L
+        set(value) {
+            field = max(1L, value)
+            currentPositionMs = currentPositionMs.coerceIn(0L, field)
+            invalidate()
+        }
+    var currentPositionMs: Long = 0L
+        set(value) {
+            field = value.coerceIn(0L, durationMs)
+            invalidate()
+        }
     private var seekListener: ((Long) -> Unit)? = null
 
     init {
@@ -43,10 +52,9 @@ class TimelineView @JvmOverloads constructor(
         setPadding(dp(12), dp(8), dp(12), dp(8))
     }
 
-    fun setTimeline(durationMs: Long, positionMs: Long) {
-        this.durationMs = max(1L, durationMs)
-        this.positionMs = positionMs.coerceIn(0L, this.durationMs)
-        invalidate()
+    fun setTimeline(durationMs: Long, currentPositionMs: Long) {
+        this.durationMs = durationMs
+        this.currentPositionMs = currentPositionMs
     }
 
     fun setOnSeekRequested(listener: (Long) -> Unit) {
@@ -62,11 +70,11 @@ class TimelineView @JvmOverloads constructor(
         val trackTop = top + dp(24)
         val trackBottom = (trackTop + resources.getDimension(R.dimen.timeline_track_height)).coerceAtMost(bottom - dp(14))
         val radius = dp(14).toFloat()
-        val ratio = positionMs / durationMs.toFloat()
+        val ratio = currentPositionMs / durationMs.toFloat()
         val playheadX = left + (right - left) * ratio
 
         canvas.drawText(context.getString(R.string.video_timeline), left, top + dp(14), labelPaint)
-        val timeText = "${formatTime(positionMs)} / ${formatTime(durationMs)}"
+        val timeText = "${formatTime(currentPositionMs)} / ${formatTime(durationMs)}"
         textPaint.textAlign = Paint.Align.RIGHT
         canvas.drawText(timeText, right, top + dp(14), textPaint)
 
@@ -113,7 +121,7 @@ class TimelineView @JvmOverloads constructor(
         val availableWidth = (right - left).coerceAtLeast(1f)
         val ratio = ((x - left) / availableWidth).coerceIn(0f, 1f)
         val target = (durationMs * ratio).toLong()
-        positionMs = target
+        currentPositionMs = target
         invalidate()
         seekListener?.invoke(target)
     }
