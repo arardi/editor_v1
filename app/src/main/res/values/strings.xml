@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">Za Editor</string>
+    <string name="start_creating">Start creating</string>
+    <string name="import_video">Import video</string>
+    <string name="recent_projects">Recent Projects</string>
+    <string name="empty_projects">No projects yet. Import a video to begin editing.</string>
+    <string name="export">Export</string>
+    <string name="export_coming_soon">Export feature coming soon.</string>
+    <string name="video_timeline">Video timeline</string>
 </resources>
