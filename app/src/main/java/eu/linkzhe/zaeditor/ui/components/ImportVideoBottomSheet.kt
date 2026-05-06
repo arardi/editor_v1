@@ -16,7 +16,6 @@ import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -35,9 +34,12 @@ import eu.linkzhe.zaeditor.theme.TextSecondary
 @Composable
 fun ImportVideoBottomSheet(
     onDismiss: () -> Unit,
-    onImportVideo: () -> Unit,
-    sheetState: SheetState = rememberModalBottomSheetState()
+    onImportVideo: () -> Unit
 ) {
+    val sheetState = rememberModalBottomSheetState(
+        skipPartiallyExpanded = true
+    )
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
