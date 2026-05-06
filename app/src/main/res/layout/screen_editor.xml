@@ -1,0 +1,102 @@
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/za_background"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="10dp"
+        android:paddingEnd="12dp">
+
+        <ImageButton
+            android:id="@+id/back_button"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@color/za_transparent"
+            android:padding="12dp"
+            android:src="@drawable/ic_back"
+            android:tint="@color/za_text_primary" />
+
+        <TextView
+            android:id="@+id/editor_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/za_text_primary"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/export_button"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@color/za_transparent"
+            android:padding="12dp"
+            android:src="@drawable/ic_export"
+            android:tint="@color/za_primary" />
+    </LinearLayout>
+
+    <androidx.media3.ui.PlayerView
+        android:id="@+id/player_view"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginEnd="16dp"
+        android:layout_weight="1"
+        android:background="@drawable/bg_video"
+        app:show_buffering="when_playing"
+        app:use_controller="false" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="16dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="16dp">
+
+        <ImageButton
+            android:id="@+id/play_pause_button"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:background="@drawable/bg_chip"
+            android:padding="10dp"
+            android:src="@drawable/ic_play"
+            android:tint="@color/za_text_primary" />
+
+        <TextView
+            android:id="@+id/time_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:textColor="@color/za_text_secondary"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <eu.linkzhe.zaeditor.TimelineView
+        android:id="@+id/timeline_view"
+        android:layout_width="match_parent"
+        android:layout_height="126dp"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="16dp"
+        android:background="@drawable/bg_timeline" />
+
+    <LinearLayout
+        android:id="@+id/editor_toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="72dp"
+        android:gravity="center"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="6dp" />
+</LinearLayout>
