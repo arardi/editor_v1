@@ -1,0 +1,12 @@
+<resources>
+    <color name="za_background">#090B12</color>
+    <color name="za_surface">#121622</color>
+    <color name="za_surface_high">#1A2030</color>
+    <color name="za_surface_soft">#242B3D</color>
+    <color name="za_primary">#2F80FF</color>
+    <color name="za_primary_soft">#273B5D</color>
+    <color name="za_text_primary">#F6F8FF</color>
+    <color name="za_text_secondary">#9BA7BD</color>
+    <color name="za_divider">#2D3548</color>
+    <color name="za_transparent">#00000000</color>
+</resources>

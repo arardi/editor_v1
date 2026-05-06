@@ -1,0 +1,10 @@
+<resources>
+    <dimen name="screen_padding">20dp</dimen>
+    <dimen name="card_radius">22dp</dimen>
+    <dimen name="toolbar_icon">22dp</dimen>
+    <dimen name="toolbar_label">10sp</dimen>
+    <dimen name="timeline_container_height">92dp</dimen>
+    <dimen name="timeline_track_height">40dp</dimen>
+    <dimen name="timeline_header_text">14sp</dimen>
+    <dimen name="timeline_time_text">12sp</dimen>
+</resources>
