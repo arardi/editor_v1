@@ -2,7 +2,15 @@ package eu.linkzhe.zaeditor.theme
 
 import androidx.compose.ui.graphics.Color
 
-val AppBackground = Color(0xFF0D0F14)
-val PrimaryBlue = Color(0xFF2F7BFF)
-val CardDark = Color(0xFF171B24)
-val TextSecondary = Color(0xFFAAB2C5)
+val AppBackground = Color(0xFF090A0F)
+val AppBackgroundAlt = Color(0xFF0B0D12)
+val PrimaryBlue = Color(0xFF0A84FF)
+val PrimaryBlueLight = Color(0xFF168BFF)
+val CardDark = Color(0xFF171A22)
+val SurfaceElevated = Color(0xFF1B1F2A)
+val SurfaceSecondary = Color(0xFF232837)
+val TextPrimary = Color(0xFFF5F7FA)
+val TextSecondary = Color(0xFFAAB2C0)
+val DividerDark = Color(0xFF2C3240)
+val DangerRed = Color(0xFFFF5A6A)
+val InactiveGrey = Color(0xFF596173)

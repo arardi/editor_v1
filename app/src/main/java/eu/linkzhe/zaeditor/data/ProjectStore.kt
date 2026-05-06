@@ -9,7 +9,7 @@ class ProjectStore(context: Context) {
 
     fun getProjects(): List<VideoProject> {
         val raw = prefs.getString("projects", null)
-        if (raw.isNullOrBlank()) return listOf(sampleProject())
+        if (raw.isNullOrBlank()) return emptyList()
         return raw.split("||").mapNotNull { decodeProject(it) }
     }
 
@@ -20,15 +20,6 @@ class ProjectStore(context: Context) {
         prefs.edit().putString("projects", cleaned.joinToString("||") { encodeProject(it) }).apply()
     }
 
-    private fun sampleProject() = VideoProject(
-        id = 0L,
-        name = "Za",
-        uri = null,
-        path = "sample",
-        createdAt = System.currentTimeMillis(),
-        durationMs = 0L,
-        fileSizeBytes = 0L
-    )
 
     private fun encodeProject(project: VideoProject): String {
         return listOf(
