@@ -3,6 +3,7 @@ package eu.linkzhe.zaeditor.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -25,8 +26,8 @@ fun EditorPreview(player: ExoPlayer, aspectRatio: Float, modifier: Modifier = Mo
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 360.dp, max = 430.dp)
-            .clip(RoundedCornerShape(24.dp))
+            .heightIn(min = 330.dp, max = 420.dp)
+            .clip(RoundedCornerShape(22.dp))
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
@@ -35,9 +36,11 @@ fun EditorPreview(player: ExoPlayer, aspectRatio: Float, modifier: Modifier = Mo
         val playerModifier = if (isPortrait) {
             Modifier
                 .fillMaxHeight()
-                .width((maxHeight.value * safeRatio).dp.coerceAtMost(maxWidth * 0.70f))
+                .width((maxHeight.value * safeRatio).dp.coerceAtMost(maxWidth * 0.64f))
         } else {
-            Modifier.fillMaxWidth()
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
         }
         Box(modifier = playerModifier, contentAlignment = Alignment.Center) {
             AndroidView(

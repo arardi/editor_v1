@@ -3,9 +3,9 @@ package eu.linkzhe.zaeditor.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -15,8 +15,6 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -24,8 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import eu.linkzhe.zaeditor.theme.CardDark
-import eu.linkzhe.zaeditor.theme.InactiveGrey
 import eu.linkzhe.zaeditor.theme.PrimaryBlue
 import eu.linkzhe.zaeditor.theme.TextPrimary
 import eu.linkzhe.zaeditor.theme.TextSecondary
@@ -33,46 +31,50 @@ import eu.linkzhe.zaeditor.theme.TextSecondary
 @Composable
 fun PlaybackControls(
     isPlaying: Boolean,
-    positionMs: Long,
+    currentPositionMs: Long,
     durationMs: Long,
-    onTogglePlay: () -> Unit,
-    onSeek: (Long) -> Unit,
+    onPlayPause: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val duration = durationMs.coerceAtLeast(1L)
-    Column(
+    Row(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(CardDark)
-            .padding(horizontal = 14.dp, vertical = 12.dp)
+            .heightIn(max = 56.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .background(CardDark.copy(alpha = 0.78f))
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(CircleShape)
-                    .background(PrimaryBlue),
-                contentAlignment = Alignment.Center
-            ) {
-                IconButton(onClick = onTogglePlay) {
-                    Icon(if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, tint = TextPrimary)
-                }
-            }
-            Text(formatTime(positionMs), color = TextSecondary, fontWeight = FontWeight.Medium)
-            Slider(
-                modifier = Modifier.weight(1f),
-                value = positionMs.coerceIn(0L, duration).toFloat(),
-                onValueChange = { onSeek(it.toLong()) },
-                valueRange = 0f..duration.toFloat(),
-                colors = SliderDefaults.colors(
-                    thumbColor = PrimaryBlue,
-                    activeTrackColor = PrimaryBlue,
-                    inactiveTrackColor = InactiveGrey.copy(alpha = 0.55f)
+        Box(
+            modifier = Modifier
+                .size(46.dp)
+                .clip(CircleShape)
+                .background(PrimaryBlue),
+            contentAlignment = Alignment.Center
+        ) {
+            IconButton(onClick = onPlayPause, modifier = Modifier.size(46.dp)) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = if (isPlaying) "Pause" else "Play",
+                    tint = TextPrimary,
+                    modifier = Modifier.size(24.dp)
                 )
-            )
-            Text(formatTime(duration), color = TextSecondary, fontWeight = FontWeight.Medium)
+            }
         }
+        Text(
+            text = formatTime(currentPositionMs),
+            color = TextPrimary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+        Text("/", color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(
+            text = formatTime(durationMs.coerceAtLeast(0L)),
+            color = TextSecondary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 

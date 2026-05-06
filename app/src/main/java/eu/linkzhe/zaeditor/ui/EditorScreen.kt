@@ -29,6 +29,7 @@ import eu.linkzhe.zaeditor.player.VideoPlayer
 import eu.linkzhe.zaeditor.theme.AppBackground
 import eu.linkzhe.zaeditor.ui.components.EditorPreview
 import eu.linkzhe.zaeditor.ui.components.EditorToolbar
+import eu.linkzhe.zaeditor.ui.components.EditorTools
 import eu.linkzhe.zaeditor.ui.components.PlaybackControls
 import eu.linkzhe.zaeditor.ui.components.TimelineView
 import eu.linkzhe.zaeditor.ui.components.ZaTopBar
@@ -42,6 +43,7 @@ fun EditorScreen(project: VideoProject, onBack: () -> Unit, onExport: () -> Unit
     var duration by remember { mutableLongStateOf(project.durationMs.takeIf { it > 0 } ?: 1L) }
     var isPlaying by remember { mutableStateOf(false) }
     var aspectRatio by remember { mutableFloatStateOf(9f / 16f) }
+    var selectedTool by remember { mutableStateOf(EditorTools.first()) }
 
     DisposableEffect(player) {
         val listener = object : Player.Listener {
@@ -74,7 +76,13 @@ fun EditorScreen(project: VideoProject, onBack: () -> Unit, onExport: () -> Unit
     Scaffold(
         containerColor = AppBackground,
         topBar = { ZaTopBar(projectName = project.name, onBack = onBack, onExport = onExport) },
-        bottomBar = { EditorToolbar(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) }
+        bottomBar = {
+            EditorToolbar(
+                selectedTool = selectedTool,
+                onToolSelected = { selectedTool = it },
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -88,12 +96,15 @@ fun EditorScreen(project: VideoProject, onBack: () -> Unit, onExport: () -> Unit
             EditorPreview(player = player, aspectRatio = aspectRatio)
             PlaybackControls(
                 isPlaying = isPlaying,
-                positionMs = position,
+                currentPositionMs = position,
                 durationMs = duration,
-                onTogglePlay = { if (player.isPlaying) player.pause() else player.play() },
-                onSeek = { player.seekTo(it) }
+                onPlayPause = { if (player.isPlaying) player.pause() else player.play() }
             )
-            TimelineView(durationMs = duration)
+            TimelineView(
+                durationMs = duration,
+                currentPositionMs = position,
+                onSeekRequested = { player.seekTo(it) }
+            )
             Spacer(Modifier.height(6.dp))
         }
     }
