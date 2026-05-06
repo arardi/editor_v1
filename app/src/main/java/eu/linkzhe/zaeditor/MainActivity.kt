@@ -5,6 +5,7 @@ import android.app.Dialog
 import android.content.Intent
 import android.database.Cursor
 import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -12,6 +13,8 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -21,8 +24,10 @@ import android.view.Window
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.ImageButton
+import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -40,6 +45,7 @@ import eu.linkzhe.zaeditor.player.VideoPlayer
 import java.text.DateFormat
 import java.util.Date
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 class MainActivity : ComponentActivity() {
     private lateinit var store: ProjectStore
@@ -161,7 +167,7 @@ class MainActivity : ComponentActivity() {
         view.findViewById<TextView>(R.id.editorProjectTitle).text = project.name
         view.findViewById<ImageButton>(R.id.backButton).setOnClickListener { showHome() }
         view.findViewById<ImageButton>(R.id.exportButton).setOnClickListener { showExportDialog() }
-        view.findViewById<TextView>(R.id.timelineToggle).setOnClickListener { showTimelinePanel() }
+        view.findViewById<TextView>(R.id.timelineToggle).setOnClickListener { toggleTimelinePanel() }
 
         val playerView = view.findViewById<PlayerView>(R.id.playerView)
         val playPause = view.findViewById<ImageButton>(R.id.playPauseButton)
@@ -180,10 +186,11 @@ class MainActivity : ComponentActivity() {
         })
 
         setupToolbarSelection(view.findViewById(R.id.toolContainer))
-        setupTransformPanel(view)
         setupBackgroundPanel(view)
         setupOverlayPanel(view)
         setupOverlayDrag(view)
+        setupTextPanel(view)
+        setupTextDrag(view)
         hideAllPanels(view)
         applyEditorStateToPreview()
         uiHandler.removeCallbacks(progressUpdater)
@@ -192,50 +199,81 @@ class MainActivity : ComponentActivity() {
 
     private fun setupToolbarSelection(toolbar: LinearLayout) {
         toolbar.removeAllViews()
+
         editorTools.forEach { tool ->
             val item = LayoutInflater.from(this).inflate(R.layout.item_editor_tool, toolbar, false)
             item.layoutParams = LinearLayout.LayoutParams(dp(64), ViewGroup.LayoutParams.MATCH_PARENT)
+
             item.findViewById<ImageView>(R.id.tool_icon).setImageResource(tool.iconRes)
             item.findViewById<TextView>(R.id.tool_label).text = tool.label
+
+            item.setBackgroundColor(Color.TRANSPARENT)
             item.setOnClickListener { onToolSelected(tool) }
+
             toolbar.addView(item)
         }
+
         updateToolSelection(toolbar)
     }
 
     private fun onToolSelected(tool: EditorTool) {
         currentTool = tool
-        container.findViewById<LinearLayout>(R.id.toolContainer)?.let(::updateToolSelection)
+
         when (tool.id) {
             "trim", "split" -> showTimelinePanel()
-            "mirror" -> showTransformPanel()
+            "mirror" -> {
+                editorState.mirrorHorizontal = !editorState.mirrorHorizontal
+                hideAllPanels(container.getChildAt(0))
+                applyEditorStateToPreview()
+            }
             "background" -> showBackgroundPanel()
             "overlay" -> showOverlayPanel()
+            "text" -> showTextPanel()
             else -> hideAllPanels(container.getChildAt(0))
+        }
+
+        container.findViewById<LinearLayout>(R.id.toolContainer)?.let { toolbar ->
+            updateToolSelection(toolbar)
         }
     }
 
     private fun updateToolSelection(toolbar: LinearLayout) {
         val selectedColor = ContextCompat.getColor(this, R.color.za_primary)
         val normalColor = ContextCompat.getColor(this, R.color.za_text_secondary)
+
         for (index in 0 until toolbar.childCount) {
             val item = toolbar.getChildAt(index)
             val tool = editorTools.getOrNull(index)
-            val color = if (tool?.id == currentTool?.id) selectedColor else normalColor
+            val color = if (tool?.let(::isToolActive) == true) selectedColor else normalColor
+
+            item.setBackgroundColor(Color.TRANSPARENT)
             item.findViewById<ImageView>(R.id.tool_icon).setColorFilter(color)
             item.findViewById<TextView>(R.id.tool_label).setTextColor(color)
-            item.setBackgroundColor(Color.TRANSPARENT)
+        }
+    }
+
+    private fun isToolActive(tool: EditorTool): Boolean {
+        return when (tool.id) {
+            "mirror" -> editorState.mirrorHorizontal
+            "overlay" -> editorState.overlayEnabled || currentTool?.id == "overlay"
+            "text" -> editorState.textOverlay.enabled || currentTool?.id == "text"
+            else -> tool.id == currentTool?.id
+        }
+    }
+
+    private fun toggleTimelinePanel() {
+        val root = container.getChildAt(0) ?: return
+        val panel = root.findViewById<View>(R.id.timelinePanel) ?: return
+        if (panel.visibility == View.VISIBLE) {
+            panel.visibility = View.GONE
+        } else {
+            showOnlyPanel(root, R.id.timelinePanel)
         }
     }
 
     private fun showTimelinePanel() {
         val root = container.getChildAt(0) ?: return
         showOnlyPanel(root, R.id.timelinePanel)
-    }
-
-    private fun showTransformPanel() {
-        val root = container.getChildAt(0) ?: return
-        showOnlyPanel(root, R.id.transformPanel)
     }
 
     private fun showBackgroundPanel() {
@@ -246,13 +284,22 @@ class MainActivity : ComponentActivity() {
     private fun showOverlayPanel() {
         val root = container.getChildAt(0) ?: return
         showOnlyPanel(root, R.id.overlayPanel)
+        updateOverlayLayout(root)
+    }
+
+    private fun showTextPanel() {
+        val root = container.getChildAt(0) ?: return
+        showOnlyPanel(root, R.id.textPanel)
+        applyTextOverlayToPreview(root)
     }
 
     private fun hideAllPanels(root: View?) {
         root ?: return
-        listOf(R.id.timelinePanel, R.id.transformPanel, R.id.backgroundPanel, R.id.overlayPanel).forEach { id ->
+        listOf(R.id.timelinePanel, R.id.backgroundPanel, R.id.overlayPanel, R.id.textPanel).forEach { id ->
             root.findViewById<View>(id)?.visibility = View.GONE
         }
+        updateOverlayLayout(root)
+        applyTextOverlayToPreview(root)
     }
 
     private fun showOnlyPanel(root: View, panelId: Int) {
@@ -262,17 +309,6 @@ class MainActivity : ComponentActivity() {
             translationY = dp(8).toFloat()
             visibility = View.VISIBLE
             animate().alpha(1f).translationY(0f).setDuration(140L).start()
-        }
-    }
-
-    private fun setupTransformPanel(root: View) {
-        root.findViewById<TextView>(R.id.mirrorButton).setOnClickListener {
-            editorState.mirrorHorizontal = !editorState.mirrorHorizontal
-            applyEditorStateToPreview()
-        }
-        root.findViewById<TextView>(R.id.flipButton).setOnClickListener {
-            editorState.flipVertical = !editorState.flipVertical
-            applyEditorStateToPreview()
         }
     }
 
@@ -301,6 +337,25 @@ class MainActivity : ComponentActivity() {
             applyEditorStateToPreview()
         }
 
+        val opacityLabel = root.findViewById<TextView>(R.id.overlayOpacityLabel)
+        val opacitySeek = root.findViewById<SeekBar>(R.id.overlayOpacitySeek)
+        val initialOpacity = (editorState.overlayAlpha * 100).roundToInt().coerceIn(1, 100)
+        opacityLabel.text = "Opacity ${initialOpacity}%"
+        opacitySeek.progress = initialOpacity
+        opacitySeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+                val progressValue = progress.coerceIn(1, 100)
+                if (progressValue != progress) seekBar.progress = progressValue
+                editorState.overlayAlpha = progressValue / 100f
+                editorState.overlayEnabled = true
+                opacityLabel.text = "Opacity ${progressValue}%"
+                applyEditorStateToPreview()
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar) = Unit
+            override fun onStopTrackingTouch(seekBar: SeekBar) = Unit
+        })
+
         val overlayColors = listOf(
             ColorOption("Blue", Color.rgb(10, 132, 255)),
             ColorOption("Red", Color.rgb(255, 69, 58)),
@@ -324,8 +379,11 @@ class MainActivity : ComponentActivity() {
             removeAllViews()
             listOf(0.25f to "25%", 0.50f to "50%", 0.75f to "75%").forEach { (alpha, label) ->
                 addView(createPanelButton(label) {
+                    val percent = (alpha * 100).roundToInt()
                     editorState.overlayAlpha = alpha
                     editorState.overlayEnabled = true
+                    opacitySeek.progress = percent
+                    opacityLabel.text = "Opacity ${percent}%"
                     applyEditorStateToPreview()
                 })
             }
@@ -336,6 +394,77 @@ class MainActivity : ComponentActivity() {
         root.findViewById<TextView>(R.id.overlayLeftButton).setOnClickListener { positionOverlay(OverlayPosition.LEFT) }
         root.findViewById<TextView>(R.id.overlayRightButton).setOnClickListener { positionOverlay(OverlayPosition.RIGHT) }
         root.findViewById<TextView>(R.id.overlayCenterButton).setOnClickListener { positionOverlay(OverlayPosition.CENTER) }
+    }
+
+    private fun setupTextPanel(root: View) {
+        val textState = editorState.textOverlay
+        val input = root.findViewById<EditText>(R.id.textInput)
+        val sizeLabel = root.findViewById<TextView>(R.id.textSizeLabel)
+        val sizeSeek = root.findViewById<SeekBar>(R.id.textSizeSeek)
+
+        input.setText(textState.text)
+        sizeSeek.progress = textState.textSizeSp.roundToInt().coerceIn(12, 96)
+        sizeLabel.text = "Size ${sizeSeek.progress}"
+
+        root.findViewById<TextView>(R.id.addTextButton).setOnClickListener {
+            textState.enabled = true
+            textState.text = input.text?.toString()?.ifBlank { "Your Text" } ?: "Your Text"
+            applyEditorStateToPreview()
+        }
+
+        input.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                if (textState.enabled) {
+                    textState.text = s?.toString()?.ifBlank { "Your Text" } ?: "Your Text"
+                    applyEditorStateToPreview()
+                }
+            }
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
+
+        sizeSeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
+                val size = progress.coerceIn(12, 96)
+                if (size != progress) seekBar.progress = size
+                textState.textSizeSp = size.toFloat()
+                sizeLabel.text = "Size $size"
+                if (textState.enabled) applyEditorStateToPreview()
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar) = Unit
+            override fun onStopTrackingTouch(seekBar: SeekBar) = Unit
+        })
+
+        val textColors = listOf(
+            ColorOption("White", Color.WHITE),
+            ColorOption("Black", Color.BLACK),
+            ColorOption("Blue", Color.rgb(10, 132, 255)),
+            ColorOption("Yellow", Color.rgb(255, 214, 10)),
+            ColorOption("Red", Color.rgb(255, 69, 58)),
+            ColorOption("Green", Color.rgb(48, 209, 88))
+        )
+        root.findViewById<LinearLayout>(R.id.textColorContainer).apply {
+            removeAllViews()
+            textColors.forEach { option ->
+                addView(createColorChip(option.color, option.label) {
+                    textState.color = option.color
+                    textState.enabled = true
+                    applyEditorStateToPreview()
+                })
+            }
+        }
+
+        root.findViewById<LinearLayout>(R.id.fontContainer).apply {
+            removeAllViews()
+            listOf("sans" to "Sans", "serif" to "Serif", "mono" to "Mono", "bold" to "Bold").forEach { (style, label) ->
+                addView(createPanelButton(label) {
+                    textState.fontStyle = style
+                    textState.enabled = true
+                    applyEditorStateToPreview()
+                })
+            }
+        }
     }
 
     private fun positionOverlay(position: OverlayPosition) {
@@ -376,80 +505,161 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun setupOverlayDrag(root: View) {
-        val previewContainer = root.findViewById<FrameLayout>(R.id.previewContainer)
-        val overlay = root.findViewById<View>(R.id.overlayColorView)
-        val handle = root.findViewById<View>(R.id.overlayDragHandle)
-        var dragOffsetX = 0f
-        var dragOffsetY = 0f
-        val dragListener = View.OnTouchListener { touchedView, event ->
-            if (!editorState.overlayEnabled) return@OnTouchListener false
+        val overlay = root.findViewById<View?>(R.id.overlayColorView) ?: return
+        val handle = root.findViewById<ImageView?>(R.id.overlayResizeHandle) ?: return
+        val preview = root.findViewById<FrameLayout?>(R.id.previewContainer) ?: return
+
+        var downRawX = 0f
+        var downRawY = 0f
+        var startX = 0f
+        var startY = 0f
+        var startWidth = 0f
+        var startHeight = 0f
+
+        overlay.setOnTouchListener { view, event ->
+            if (currentTool?.id != "overlay") return@setOnTouchListener false
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    dragOffsetX = touchedView.x - event.rawX
-                    dragOffsetY = touchedView.y - event.rawY
+                    downRawX = event.rawX
+                    downRawY = event.rawY
+                    startX = view.x
+                    startY = view.y
                     true
                 }
+
                 MotionEvent.ACTION_MOVE -> {
-                    val maxX = max(0, previewContainer.width - overlay.width).toFloat()
-                    val maxY = max(0, previewContainer.height - overlay.height).toFloat()
-                    val newX = (event.rawX + dragOffsetX).coerceIn(0f, maxX)
-                    val newY = (event.rawY + dragOffsetY).coerceIn(0f, maxY)
-                    overlay.x = newX
-                    overlay.y = newY
-                    handle.x = newX + overlay.width / 2f - handle.width / 2f
-                    handle.y = newY + overlay.height / 2f - handle.height / 2f
-                    editorState.overlayX = if (previewContainer.width > 0) newX / previewContainer.width else 0f
-                    editorState.overlayY = if (previewContainer.height > 0) newY / previewContainer.height else 0f
+                    val newX = (startX + event.rawX - downRawX)
+                        .coerceIn(0f, (preview.width - view.width).coerceAtLeast(0).toFloat())
+                    val newY = (startY + event.rawY - downRawY)
+                        .coerceIn(0f, (preview.height - view.height).coerceAtLeast(0).toFloat())
+
+                    if (preview.width > 0 && preview.height > 0) {
+                        editorState.overlayX = newX / preview.width.toFloat()
+                        editorState.overlayY = newY / preview.height.toFloat()
+                    }
+                    updateOverlayLayout(root)
                     true
                 }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    touchedView.performClick()
-                    true
-                }
-                else -> false
+
+                else -> true
             }
-            toolbar.addView(item)
         }
-        updateToolSelection(toolbar)
+
+        handle.setOnTouchListener { _, event ->
+            if (currentTool?.id != "overlay") return@setOnTouchListener false
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downRawX = event.rawX
+                    downRawY = event.rawY
+                    startWidth = overlay.width.toFloat()
+                    startHeight = overlay.height.toFloat()
+                    true
+                }
+
+                MotionEvent.ACTION_MOVE -> {
+                    val maxWidth = (preview.width - overlay.x).coerceAtLeast(1f)
+                    val maxHeight = (preview.height - overlay.y).coerceAtLeast(1f)
+                    val minWidth = preview.width * 0.10f
+                    val minHeight = preview.height * 0.10f
+                    val newWidth = (startWidth + event.rawX - downRawX).coerceIn(minWidth, maxWidth)
+                    val newHeight = (startHeight + event.rawY - downRawY).coerceIn(minHeight, maxHeight)
+
+                    if (preview.width > 0 && preview.height > 0) {
+                        editorState.overlayX = editorState.overlayX.coerceIn(0f, 0.90f)
+                        editorState.overlayY = editorState.overlayY.coerceIn(0f, 0.90f)
+                        val maxWidthRatio = (1f - editorState.overlayX).coerceAtLeast(0.10f)
+                        val maxHeightRatio = (1f - editorState.overlayY).coerceAtLeast(0.10f)
+                        editorState.overlayWidth = (newWidth / preview.width.toFloat()).coerceIn(0.10f, maxWidthRatio)
+                        editorState.overlayHeight = (newHeight / preview.height.toFloat()).coerceIn(0.10f, maxHeightRatio)
+                    }
+                    updateOverlayLayout(root)
+                    true
+                }
+
+                else -> true
+            }
+        }
     }
 
-    private fun updateToolSelection(toolbar: LinearLayout) {
-        val selectedColor = ContextCompat.getColor(this, R.color.za_primary)
-        val normalColor = ContextCompat.getColor(this, R.color.za_text_secondary)
-        for (index in 0 until toolbar.childCount) {
-            val item = toolbar.getChildAt(index)
-            val color = if (index == selectedToolIndex) selectedColor else normalColor
-            item.findViewById<ImageView>(R.id.tool_icon).setColorFilter(color)
-            item.findViewById<TextView>(R.id.tool_label).setTextColor(color)
-            item.setBackgroundColor(Color.TRANSPARENT)
+    private fun setupTextDrag(root: View) {
+        val textView = root.findViewById<TextView?>(R.id.textOverlayView) ?: return
+        val handle = root.findViewById<ImageView?>(R.id.textResizeHandle) ?: return
+        val preview = root.findViewById<FrameLayout?>(R.id.previewContainer) ?: return
+        val textState = editorState.textOverlay
+
+        var downRawX = 0f
+        var downRawY = 0f
+        var startX = 0f
+        var startY = 0f
+        var startSize = 0f
+
+        textView.setOnTouchListener { view, event ->
+            if (currentTool?.id != "text") return@setOnTouchListener false
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downRawX = event.rawX
+                    downRawY = event.rawY
+                    startX = view.x
+                    startY = view.y
+                    true
+                }
+
+                MotionEvent.ACTION_MOVE -> {
+                    val newX = (startX + event.rawX - downRawX)
+                        .coerceIn(0f, (preview.width - view.width).coerceAtLeast(0).toFloat())
+                    val newY = (startY + event.rawY - downRawY)
+                        .coerceIn(0f, (preview.height - view.height).coerceAtLeast(0).toFloat())
+
+                    if (preview.width > 0 && preview.height > 0) {
+                        textState.x = newX / preview.width.toFloat()
+                        textState.y = newY / preview.height.toFloat()
+                    }
+                    applyTextOverlayToPreview(root)
+                    true
+                }
+
+                else -> true
+            }
         }
-        overlay.setOnTouchListener(dragListener)
-        handle.setOnTouchListener(dragListener)
+
+        handle.setOnTouchListener { _, event ->
+            if (currentTool?.id != "text") return@setOnTouchListener false
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downRawX = event.rawX
+                    downRawY = event.rawY
+                    startSize = textState.textSizeSp
+                    true
+                }
+
+                MotionEvent.ACTION_MOVE -> {
+                    val delta = ((event.rawX - downRawX) + (event.rawY - downRawY)) / resources.displayMetrics.density / 2f
+                    textState.textSizeSp = (startSize + delta).coerceIn(12f, 96f)
+                    root.findViewById<SeekBar?>(R.id.textSizeSeek)?.progress = textState.textSizeSp.roundToInt()
+                    root.findViewById<TextView?>(R.id.textSizeLabel)?.text = "Size ${textState.textSizeSp.roundToInt()}"
+                    applyTextOverlayToPreview(root)
+                    true
+                }
+
+                else -> true
+            }
+        }
     }
 
     private fun applyEditorStateToPreview() {
         val root = container.getChildAt(0) ?: return
-        val previewContainer = root.findViewById<FrameLayout>(R.id.previewContainer) ?: return
         val playerView = root.findViewById<PlayerView>(R.id.playerView) ?: return
-        val overlay = root.findViewById<View>(R.id.overlayColorView) ?: return
-        val handle = root.findViewById<View>(R.id.overlayDragHandle) ?: return
 
         playerView.scaleX = if (editorState.mirrorHorizontal) -1f else 1f
-        playerView.scaleY = if (editorState.flipVertical) -1f else 1f
-        previewContainer.setBackgroundColor(editorState.backgroundColor)
-        overlay.visibility = if (editorState.overlayEnabled) View.VISIBLE else View.GONE
-        handle.visibility = if (editorState.overlayEnabled) View.VISIBLE else View.GONE
-        overlay.setBackgroundColor(editorState.overlayColorWithAlpha)
-        updateTransformButtons(root)
+        playerView.scaleY = 1f
+        root.findViewById<FrameLayout>(R.id.previewContainer)?.setBackgroundColor(editorState.backgroundColor)
+        root.findViewById<View>(R.id.overlayColorView)?.setBackgroundColor(editorState.overlayColorWithAlpha)
         updateOverlayToggle(root)
-        updateOverlayLayout(previewContainer, overlay, handle)
-    }
-
-    private fun updateTransformButtons(root: View) {
-        val active = ContextCompat.getColor(this, R.color.za_primary)
-        val inactive = ContextCompat.getColor(this, R.color.za_text_secondary)
-        root.findViewById<TextView>(R.id.mirrorButton)?.setTextColor(if (editorState.mirrorHorizontal) active else inactive)
-        root.findViewById<TextView>(R.id.flipButton)?.setTextColor(if (editorState.flipVertical) active else inactive)
+        updateOverlayLayout(root)
+        applyTextOverlayToPreview(root)
+        container.findViewById<LinearLayout>(R.id.toolContainer)?.let { toolbar ->
+            updateToolSelection(toolbar)
+        }
     }
 
     private fun updateOverlayToggle(root: View) {
@@ -457,21 +667,76 @@ class MainActivity : ComponentActivity() {
             text = if (editorState.overlayEnabled) "Overlay on" else "Enable overlay"
             setTextColor(ContextCompat.getColor(this@MainActivity, if (editorState.overlayEnabled) R.color.za_primary else R.color.za_text_secondary))
         }
+        val opacity = (editorState.overlayAlpha * 100).roundToInt().coerceIn(1, 100)
+        root.findViewById<TextView?>(R.id.overlayOpacityLabel)?.text = "Opacity ${opacity}%"
     }
 
-    private fun updateOverlayLayout(previewContainer: FrameLayout, overlay: View, handle: View) {
-        previewContainer.post {
-            val width = max(1, (previewContainer.width * editorState.overlayWidth).toInt())
-            val height = max(1, (previewContainer.height * editorState.overlayHeight).toInt())
+    private fun updateOverlayLayout(root: View? = container.getChildAt(0)) {
+        root ?: return
+        val preview = root.findViewById<FrameLayout?>(R.id.previewContainer) ?: return
+        val overlay = root.findViewById<View?>(R.id.overlayColorView) ?: return
+        val handle = root.findViewById<ImageView?>(R.id.overlayResizeHandle) ?: return
+
+        preview.post {
+            if (!editorState.overlayEnabled) {
+                overlay.visibility = View.GONE
+                handle.visibility = View.GONE
+                return@post
+            }
+
+            val width = max(1, (preview.width * editorState.overlayWidth).toInt())
+            val height = max(1, (preview.height * editorState.overlayHeight).toInt())
             val maxLeftRatio = (1f - editorState.overlayWidth).coerceAtLeast(0f)
             val maxTopRatio = (1f - editorState.overlayHeight).coerceAtLeast(0f)
             editorState.overlayX = editorState.overlayX.coerceIn(0f, maxLeftRatio)
             editorState.overlayY = editorState.overlayY.coerceIn(0f, maxTopRatio)
+
+            overlay.visibility = View.VISIBLE
+            handle.visibility = if (currentTool?.id == "overlay") View.VISIBLE else View.GONE
             overlay.layoutParams = FrameLayout.LayoutParams(width, height)
-            overlay.x = previewContainer.width * editorState.overlayX
-            overlay.y = previewContainer.height * editorState.overlayY
-            handle.x = overlay.x + width / 2f - handle.width / 2f
-            handle.y = overlay.y + height / 2f - handle.height / 2f
+            overlay.x = preview.width * editorState.overlayX
+            overlay.y = preview.height * editorState.overlayY
+            handle.x = overlay.x + width - handle.width / 2f
+            handle.y = overlay.y + height - handle.height / 2f
+        }
+    }
+
+    private fun applyTextOverlayToPreview(root: View? = container.getChildAt(0)) {
+        root ?: return
+        val preview = root.findViewById<FrameLayout?>(R.id.previewContainer) ?: return
+        val textView = root.findViewById<TextView?>(R.id.textOverlayView) ?: return
+        val handle = root.findViewById<ImageView?>(R.id.textResizeHandle) ?: return
+        val textState = editorState.textOverlay
+
+        preview.post {
+            if (!textState.enabled) {
+                textView.visibility = View.GONE
+                handle.visibility = View.GONE
+                return@post
+            }
+
+            textView.visibility = View.VISIBLE
+            handle.visibility = if (currentTool?.id == "text") View.VISIBLE else View.GONE
+            textView.text = textState.text
+            textView.setTextColor(textState.color)
+            textView.textSize = textState.textSizeSp
+            textView.typeface = when (textState.fontStyle) {
+                "serif" -> Typeface.SERIF
+                "mono" -> Typeface.MONOSPACE
+                "bold" -> Typeface.DEFAULT_BOLD
+                else -> Typeface.SANS_SERIF
+            }
+
+            val maxX = (preview.width - textView.width).coerceAtLeast(0).toFloat()
+            val maxY = (preview.height - textView.height).coerceAtLeast(0).toFloat()
+            textView.x = (preview.width * textState.x).coerceIn(0f, maxX)
+            textView.y = (preview.height * textState.y).coerceIn(0f, maxY)
+            if (preview.width > 0 && preview.height > 0) {
+                textState.x = textView.x / preview.width.toFloat()
+                textState.y = textView.y / preview.height.toFloat()
+            }
+            handle.x = textView.x + textView.width - handle.width / 2f
+            handle.y = textView.y + textView.height - handle.height / 2f
         }
     }
 
@@ -503,23 +768,35 @@ class MainActivity : ComponentActivity() {
 
     private fun updatePlaybackState() {
         val root = container.getChildAt(0) ?: return
-        val activePlayer = player ?: return
-        val duration = if (activePlayer.duration > 0) activePlayer.duration else currentProject?.durationMs ?: 1L
-        val position = activePlayer.currentPosition.coerceAtLeast(0L)
-        root.findViewById<TimelineView>(R.id.timelineView)?.setTimeline(duration, position)
-        root.findViewById<TextView>(R.id.currentTimeText)?.text = TimelineView.formatTime(position)
-        root.findViewById<TextView>(R.id.durationText)?.text = TimelineView.formatTime(duration)
-        root.findViewById<ImageButton>(R.id.playPauseButton)?.setImageResource(
-            if (activePlayer.isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+        val exoPlayer = player ?: return
+        val duration = if (exoPlayer.duration > 0) exoPlayer.duration else 1L
+        val position = exoPlayer.currentPosition.coerceAtLeast(0L).coerceAtMost(duration)
+
+        root.findViewById<TextView?>(R.id.currentTimeText)?.text =
+            "${formatTime(position)} / ${formatTime(duration)}"
+
+        root.findViewById<TextView?>(R.id.durationText)?.text =
+            formatTime(duration)
+
+        root.findViewById<ImageButton?>(R.id.playPauseButton)?.setImageResource(
+            if (exoPlayer.isPlaying) R.drawable.ic_pause else R.drawable.ic_play
         )
+
+        root.findViewById<TimelineView?>(R.id.timelineView)?.apply {
+            durationMs = duration
+            currentPositionMs = position
+        }
     }
 
     private fun showImportSheet() {
         val dialog = Dialog(this)
         val sheet = layoutInflater.inflate(R.layout.view_import_video_sheet, null, false)
-        sheet.findViewById<View>(R.id.import_video_action).setOnClickListener {
+        sheet.findViewById<View>(R.id.importVideoAction).setOnClickListener {
             dialog.dismiss()
             pickVideo()
+        }
+        sheet.findViewById<View?>(R.id.cancelAction)?.setOnClickListener {
+            dialog.dismiss()
         }
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         dialog.setContentView(sheet)
@@ -532,47 +809,13 @@ class MainActivity : ComponentActivity() {
 
     private fun showExportDialog() {
         AlertDialog.Builder(this)
-            .setTitle(R.string.export)
-            .setMessage(R.string.export_coming_soon)
-            .setPositiveButton(android.R.string.ok, null)
+            .setTitle("Export")
+            .setMessage("Export pipeline prepared. Final rendering coming soon.")
+            .setPositiveButton("OK", null)
             .show()
     }
 
-    private fun updatePlaybackState() {
-        val root = container.getChildAt(0) ?: return
-        val activePlayer = player ?: return
-        val duration = if (activePlayer.duration > 0) activePlayer.duration else currentProject?.durationMs ?: 1L
-        val position = activePlayer.currentPosition.coerceAtLeast(0L)
-        root.findViewById<TimelineView>(R.id.timeline_view)?.setTimeline(duration, position)
-        root.findViewById<TextView>(R.id.time_label)?.text = "${TimelineView.formatTime(position)} / ${TimelineView.formatTime(duration)}"
-        root.findViewById<ImageButton>(R.id.play_pause_button)?.setImageResource(
-            if (activePlayer.isPlaying) R.drawable.ic_pause else R.drawable.ic_play
-        )
-    }
-
-    private fun showImportSheet() {
-        val dialog = Dialog(this)
-        val sheet = layoutInflater.inflate(R.layout.view_import_video_sheet, null, false)
-        sheet.findViewById<View>(R.id.import_video_action).setOnClickListener {
-            dialog.dismiss()
-            pickVideo()
-        }
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
-        dialog.setContentView(sheet)
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        dialog.window?.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT)
-        dialog.window?.setGravity(Gravity.BOTTOM)
-        dialog.show()
-        dialog.window?.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT)
-    }
-
-    private fun showExportDialog() {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.export)
-            .setMessage(R.string.export_coming_soon)
-            .setPositiveButton(android.R.string.ok, null)
-            .show()
-    }
+    private fun formatTime(ms: Long): String = TimelineView.formatTime(ms)
 
     private fun pickVideo() {
         if (ActivityResultContracts.PickVisualMedia.isPhotoPickerAvailable(this)) {

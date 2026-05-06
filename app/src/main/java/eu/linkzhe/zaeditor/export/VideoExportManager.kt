@@ -13,7 +13,7 @@ class VideoExportManager(private val context: Context) {
 
     fun export(inputUri: Uri, editorState: EditorState, outputFile: File) {
         // TODO: Build the final MediaCodec/FFmpeg rendering pipeline.
-        // TODO: Apply mirrorHorizontal and flipVertical transforms.
+        // TODO: Apply mirrorHorizontal transform.
         // TODO: Render backgroundColor as the video canvas behind the source video.
         // TODO: Composite overlayColorWithAlpha at overlayX/overlayY with overlayWidth/overlayHeight.
         // TODO: Apply trim and split ranges once timeline editing data is persisted.
