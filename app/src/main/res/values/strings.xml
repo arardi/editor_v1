@@ -5,6 +5,13 @@
     <string name="recent_projects">Recent Projects</string>
     <string name="empty_projects">No projects yet. Import a video to begin editing.</string>
     <string name="export">Export</string>
-    <string name="export_coming_soon">Export feature coming soon.</string>
-    <string name="video_timeline">Video timeline</string>
+    <string name="export_coming_soon">Export pipeline prepared. Final rendering coming soon.</string>
+    <string name="video_timeline">Timeline</string>
+    <string name="back_to_exit">Tekan sekali lagi untuk keluar</string>
+    <string name="mirror">Mirror</string>
+    <string name="flip">Flip</string>
+    <string name="background">Background</string>
+    <string name="overlay">Overlay</string>
+    <string name="enable_overlay">Enable overlay</string>
+    <string name="drag_overlay_hint">Drag overlay on preview to adjust position</string>
 </resources>

@@ -34,13 +34,13 @@ class TimelineView @JvmOverloads constructor(
         progressPaint.color = ContextCompat.getColor(context, R.color.za_primary_soft)
         tickPaint.color = ContextCompat.getColor(context, R.color.za_divider)
         textPaint.color = ContextCompat.getColor(context, R.color.za_text_secondary)
-        textPaint.textSize = 10f * resources.displayMetrics.scaledDensity
+        textPaint.textSize = 9f * resources.displayMetrics.scaledDensity
         textPaint.textAlign = Paint.Align.CENTER
         playheadPaint.color = ContextCompat.getColor(context, R.color.za_primary)
         labelPaint.color = ContextCompat.getColor(context, R.color.za_text_primary)
-        labelPaint.textSize = 13f * resources.displayMetrics.scaledDensity
+        labelPaint.textSize = resources.getDimension(R.dimen.timeline_header_text)
         labelPaint.isFakeBoldText = true
-        setPadding(dp(14), dp(12), dp(14), dp(12))
+        setPadding(dp(12), dp(8), dp(12), dp(8))
     }
 
     fun setTimeline(durationMs: Long, positionMs: Long) {
@@ -59,16 +59,16 @@ class TimelineView @JvmOverloads constructor(
         val right = (width - paddingRight).toFloat()
         val top = paddingTop.toFloat()
         val bottom = (height - paddingBottom).toFloat()
-        val trackTop = top + dp(34)
-        val trackBottom = bottom - dp(18)
+        val trackTop = top + dp(24)
+        val trackBottom = (trackTop + resources.getDimension(R.dimen.timeline_track_height)).coerceAtMost(bottom - dp(14))
         val radius = dp(14).toFloat()
         val ratio = positionMs / durationMs.toFloat()
         val playheadX = left + (right - left) * ratio
 
-        canvas.drawText(context.getString(R.string.video_timeline), left, top + dp(13), labelPaint)
+        canvas.drawText(context.getString(R.string.video_timeline), left, top + dp(14), labelPaint)
         val timeText = "${formatTime(positionMs)} / ${formatTime(durationMs)}"
         textPaint.textAlign = Paint.Align.RIGHT
-        canvas.drawText(timeText, right, top + dp(13), textPaint)
+        canvas.drawText(timeText, right, top + dp(14), textPaint)
 
         trackRect.set(left, trackTop, right, trackBottom)
         canvas.drawRoundRect(trackRect, radius, radius, trackPaint)
@@ -80,14 +80,14 @@ class TimelineView @JvmOverloads constructor(
         for (index in 0 until tickCount) {
             val tickRatio = index / (tickCount - 1).toFloat()
             val x = left + (right - left) * tickRatio
-            val tickHeight = if (index % 2 == 0) dp(13) else dp(8)
-            canvas.drawRect(x - 0.5f * density, trackTop + dp(10), x + 0.5f * density, trackTop + dp(10) + tickHeight, tickPaint)
+            val tickHeight = if (index % 2 == 0) dp(9) else dp(5)
+            canvas.drawRect(x - 0.35f * density, trackTop + dp(9), x + 0.35f * density, trackTop + dp(9) + tickHeight, tickPaint)
             textPaint.textAlign = Paint.Align.CENTER
             canvas.drawText(formatRulerTime((durationMs * tickRatio).toLong()), x, bottom, textPaint)
         }
 
-        canvas.drawRect(playheadX - density, trackTop - dp(8), playheadX + density, trackBottom + dp(8), playheadPaint)
-        canvas.drawCircle(playheadX, trackTop - dp(8), dp(6).toFloat(), playheadPaint)
+        canvas.drawRect(playheadX - density, trackTop - dp(5), playheadX + density, trackBottom + dp(5), playheadPaint)
+        canvas.drawCircle(playheadX, trackTop - dp(5), dp(5).toFloat(), playheadPaint)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -110,7 +110,8 @@ class TimelineView @JvmOverloads constructor(
     private fun seekToX(x: Float) {
         val left = paddingLeft.toFloat()
         val right = (width - paddingRight).toFloat()
-        val ratio = ((x - left) / (right - left)).coerceIn(0f, 1f)
+        val availableWidth = (right - left).coerceAtLeast(1f)
+        val ratio = ((x - left) / availableWidth).coerceIn(0f, 1f)
         val target = (durationMs * ratio).toLong()
         positionMs = target
         invalidate()
