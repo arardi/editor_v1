@@ -1,9 +1,7 @@
 package eu.linkzhe.zaeditor.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -11,15 +9,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Sort
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,13 +24,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import eu.linkzhe.zaeditor.model.VideoProject
 import eu.linkzhe.zaeditor.theme.AppBackground
-import eu.linkzhe.zaeditor.theme.PrimaryBlue
-import eu.linkzhe.zaeditor.ui.components.ProjectCard
+import eu.linkzhe.zaeditor.theme.TextPrimary
+import eu.linkzhe.zaeditor.theme.TextSecondary
+import eu.linkzhe.zaeditor.ui.components.EmptyProjectsState
+import eu.linkzhe.zaeditor.ui.components.ImportVideoBottomSheet
+import eu.linkzhe.zaeditor.ui.components.RecentProjectCard
+import eu.linkzhe.zaeditor.ui.components.StartCreatingCard
 
 @Composable
 fun HomeScreen(
@@ -41,55 +41,51 @@ fun HomeScreen(
     onImportVideo: () -> Unit,
     onOpenProject: (VideoProject) -> Unit
 ) {
-    var showDialog by remember { mutableStateOf(false) }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(AppBackground)
-            .padding(20.dp)
-    ) {
-        Box(
+    var showSheet by remember { mutableStateOf(false) }
+    val realProjects = projects.filter { it.uri != null }
+
+    Scaffold(containerColor = AppBackground) { innerPadding ->
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .height(220.dp)
-                .clip(RoundedCornerShape(36.dp))
-                .background(PrimaryBlue)
-                .clickable { showDialog = true },
-            contentAlignment = Alignment.Center
+                .fillMaxSize()
+                .background(AppBackground)
+                .statusBarsPadding()
+                .padding(innerPadding)
+                .padding(horizontal = 22.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(22.dp)
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Icon(Icons.Default.Add, contentDescription = null)
-                Text("Start Creating", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text("Tap to create a new project")
+            Spacer(Modifier.height(6.dp))
+            StartCreatingCard(onClick = { showSheet = true })
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Recent Projects",
+                    modifier = Modifier.weight(1f),
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+                Icon(Icons.Default.Sort, contentDescription = null, tint = TextSecondary)
             }
-        }
-        Spacer(Modifier.height(24.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Recent Projects", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-            Icon(Icons.Default.Sort, contentDescription = null)
-        }
-        Spacer(Modifier.height(12.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            projects.forEach { project ->
-                Box(modifier = Modifier.clickable { if (project.uri != null) onOpenProject(project) }) {
-                    ProjectCard(project)
+            if (realProjects.isEmpty()) {
+                EmptyProjectsState()
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    realProjects.forEach { project ->
+                        RecentProjectCard(project = project, onClick = { onOpenProject(project) })
+                    }
                 }
             }
+            Spacer(Modifier.height(18.dp))
         }
     }
 
-    if (showDialog) {
-        AlertDialog(
-            onDismissRequest = { showDialog = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    showDialog = false
-                    onImportVideo()
-                }) { Text("Import Video") }
-            },
-            dismissButton = { TextButton(onClick = { showDialog = false }) { Text("Cancel") } },
-            title = { Text("Create Project") },
-            text = { Text("Choose an action") }
+    if (showSheet) {
+        ImportVideoBottomSheet(
+            onDismiss = { showSheet = false },
+            onImportVideo = {
+                showSheet = false
+                onImportVideo()
+            }
         )
     }
 }
