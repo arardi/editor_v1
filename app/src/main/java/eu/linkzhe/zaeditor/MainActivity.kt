@@ -192,20 +192,30 @@ class MainActivity : ComponentActivity() {
 
     private fun setupToolbarSelection(toolbar: LinearLayout) {
         toolbar.removeAllViews()
+
         editorTools.forEach { tool ->
             val item = LayoutInflater.from(this).inflate(R.layout.item_editor_tool, toolbar, false)
             item.layoutParams = LinearLayout.LayoutParams(dp(64), ViewGroup.LayoutParams.MATCH_PARENT)
+
             item.findViewById<ImageView>(R.id.tool_icon).setImageResource(tool.iconRes)
             item.findViewById<TextView>(R.id.tool_label).text = tool.label
+
+            item.setBackgroundColor(Color.TRANSPARENT)
             item.setOnClickListener { onToolSelected(tool) }
+
             toolbar.addView(item)
         }
+
         updateToolSelection(toolbar)
     }
 
     private fun onToolSelected(tool: EditorTool) {
         currentTool = tool
-        container.findViewById<LinearLayout>(R.id.toolContainer)?.let(::updateToolSelection)
+
+        container.findViewById<LinearLayout>(R.id.toolContainer)?.let { toolbar ->
+            updateToolSelection(toolbar)
+        }
+
         when (tool.id) {
             "trim", "split" -> showTimelinePanel()
             "mirror" -> showTransformPanel()
@@ -218,13 +228,15 @@ class MainActivity : ComponentActivity() {
     private fun updateToolSelection(toolbar: LinearLayout) {
         val selectedColor = ContextCompat.getColor(this, R.color.za_primary)
         val normalColor = ContextCompat.getColor(this, R.color.za_text_secondary)
+
         for (index in 0 until toolbar.childCount) {
             val item = toolbar.getChildAt(index)
             val tool = editorTools.getOrNull(index)
             val color = if (tool?.id == currentTool?.id) selectedColor else normalColor
+
+            item.setBackgroundColor(Color.TRANSPARENT)
             item.findViewById<ImageView>(R.id.tool_icon).setColorFilter(color)
             item.findViewById<TextView>(R.id.tool_label).setTextColor(color)
-            item.setBackgroundColor(Color.TRANSPARENT)
         }
     }
 
@@ -376,55 +388,44 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun setupOverlayDrag(root: View) {
-        val previewContainer = root.findViewById<FrameLayout>(R.id.previewContainer)
-        val overlay = root.findViewById<View>(R.id.overlayColorView)
-        val handle = root.findViewById<View>(R.id.overlayDragHandle)
-        var dragOffsetX = 0f
-        var dragOffsetY = 0f
-        val dragListener = View.OnTouchListener { touchedView, event ->
-            if (!editorState.overlayEnabled) return@OnTouchListener false
+        val overlay = root.findViewById<View?>(R.id.overlayColorView) ?: return
+        val preview = root.findViewById<FrameLayout?>(R.id.previewContainer) ?: return
+
+        var downRawX = 0f
+        var downRawY = 0f
+        var startX = 0f
+        var startY = 0f
+
+        overlay.setOnTouchListener { view, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
-                    dragOffsetX = touchedView.x - event.rawX
-                    dragOffsetY = touchedView.y - event.rawY
+                    downRawX = event.rawX
+                    downRawY = event.rawY
+                    startX = view.x
+                    startY = view.y
                     true
                 }
-                MotionEvent.ACTION_MOVE -> {
-                    val maxX = max(0, previewContainer.width - overlay.width).toFloat()
-                    val maxY = max(0, previewContainer.height - overlay.height).toFloat()
-                    val newX = (event.rawX + dragOffsetX).coerceIn(0f, maxX)
-                    val newY = (event.rawY + dragOffsetY).coerceIn(0f, maxY)
-                    overlay.x = newX
-                    overlay.y = newY
-                    handle.x = newX + overlay.width / 2f - handle.width / 2f
-                    handle.y = newY + overlay.height / 2f - handle.height / 2f
-                    editorState.overlayX = if (previewContainer.width > 0) newX / previewContainer.width else 0f
-                    editorState.overlayY = if (previewContainer.height > 0) newY / previewContainer.height else 0f
-                    true
-                }
-                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    touchedView.performClick()
-                    true
-                }
-                else -> false
-            }
-            toolbar.addView(item)
-        }
-        updateToolSelection(toolbar)
-    }
 
-    private fun updateToolSelection(toolbar: LinearLayout) {
-        val selectedColor = ContextCompat.getColor(this, R.color.za_primary)
-        val normalColor = ContextCompat.getColor(this, R.color.za_text_secondary)
-        for (index in 0 until toolbar.childCount) {
-            val item = toolbar.getChildAt(index)
-            val color = if (index == selectedToolIndex) selectedColor else normalColor
-            item.findViewById<ImageView>(R.id.tool_icon).setColorFilter(color)
-            item.findViewById<TextView>(R.id.tool_label).setTextColor(color)
-            item.setBackgroundColor(Color.TRANSPARENT)
+                MotionEvent.ACTION_MOVE -> {
+                    val newX = (startX + event.rawX - downRawX)
+                        .coerceIn(0f, (preview.width - view.width).coerceAtLeast(0).toFloat())
+                    val newY = (startY + event.rawY - downRawY)
+                        .coerceIn(0f, (preview.height - view.height).coerceAtLeast(0).toFloat())
+
+                    view.x = newX
+                    view.y = newY
+
+                    if (preview.width > 0 && preview.height > 0) {
+                        editorState.overlayX = newX / preview.width.toFloat()
+                        editorState.overlayY = newY / preview.height.toFloat()
+                    }
+
+                    true
+                }
+
+                else -> true
+            }
         }
-        overlay.setOnTouchListener(dragListener)
-        handle.setOnTouchListener(dragListener)
     }
 
     private fun applyEditorStateToPreview() {
