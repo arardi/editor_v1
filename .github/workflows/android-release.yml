@@ -20,10 +20,13 @@ jobs:
   build:
     name: Build APK
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup JDK 17
         uses: actions/setup-java@v4
@@ -37,51 +40,59 @@ jobs:
           gradle-version: "8.10"
 
       - name: Build APKs
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
           gradle clean assembleDebug assembleRelease
 
       - name: Show APK outputs
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
           echo "APK files generated:"
           find app/build/outputs/apk -type f -name "*.apk" -print -exec ls -lh {} \;
 
-      - name: Determine release tag
+      - name: Determine release variables
         id: release_vars
+        shell: bash
         env:
-          INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag }}
+          INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag || '' }}
         run: |
-          set -e
+          set -euo pipefail
 
           RELEASE_TAG=""
+          SHOULD_RELEASE="false"
 
-          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
             RELEASE_TAG="${GITHUB_REF_NAME}"
+            SHOULD_RELEASE="true"
           fi
 
           if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${INPUT_RELEASE_TAG}" ]]; then
             RELEASE_TAG="${INPUT_RELEASE_TAG}"
+            SHOULD_RELEASE="true"
           fi
 
           echo "release_tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "should_release=${SHOULD_RELEASE}" >> "$GITHUB_OUTPUT"
 
-          if [[ -n "${RELEASE_TAG}" ]]; then
-            echo "Release tag: ${RELEASE_TAG}"
-          else
-            echo "No release tag. This run will only upload Actions artifact."
-          fi
+          echo "Event name: ${GITHUB_EVENT_NAME}"
+          echo "Ref type: ${GITHUB_REF_TYPE}"
+          echo "Ref name: ${GITHUB_REF_NAME}"
+          echo "Should release: ${SHOULD_RELEASE}"
+          echo "Release tag: ${RELEASE_TAG}"
 
       - name: Prepare APK files
+        shell: bash
         env:
           RELEASE_TAG: ${{ steps.release_vars.outputs.release_tag }}
         run: |
-          set -e
+          set -euo pipefail
 
           mkdir -p release-files
 
-          DEBUG_APK="$(find app/build/outputs/apk/debug -type f -name "*.apk" | head -n 1)"
-          RELEASE_APK="$(find app/build/outputs/apk/release -type f -name "*.apk" | head -n 1)"
+          DEBUG_APK="$(find app/build/outputs/apk/debug -type f -name "*.apk" | head -n 1 || true)"
+          RELEASE_APK="$(find app/build/outputs/apk/release -type f -name "*.apk" | head -n 1 || true)"
 
           if [[ -z "${DEBUG_APK}" ]]; then
             echo "::error::Debug APK not found"
@@ -100,7 +111,7 @@ jobs:
             cp "${RELEASE_APK}" "release-files/ZaEditor-${RELEASE_TAG}.apk"
           fi
 
-          echo "Prepared files:"
+          echo "Prepared APK files:"
           ls -lah release-files/
 
       - name: Upload APK artifact
@@ -110,14 +121,15 @@ jobs:
           path: release-files/*.apk
           if-no-files-found: error
 
-      - name: Upload APK to GitHub Release
-        if: steps.release_vars.outputs.release_tag != ''
+      - name: Create or update GitHub Release
+        if: steps.release_vars.outputs.should_release == 'true'
+        shell: bash
         env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: arardi/editor_v1
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ steps.release_vars.outputs.release_tag }}
         run: |
-          set -e
+          set -euo pipefail
 
           APK_FILE="release-files/ZaEditor-${RELEASE_TAG}.apk"
 
@@ -126,27 +138,32 @@ jobs:
             exit 1
           fi
 
-          echo "Uploading APK to GitHub Release:"
           echo "Repository: ${GH_REPO}"
-          echo "Tag: ${RELEASE_TAG}"
-          echo "APK: ${APK_FILE}"
+          echo "Release tag: ${RELEASE_TAG}"
+          echo "APK file: ${APK_FILE}"
           ls -lah "${APK_FILE}"
 
           gh auth status --hostname github.com
 
           if gh release view "${RELEASE_TAG}" --repo "${GH_REPO}" >/dev/null 2>&1; then
-            echo "Release already exists. Uploading asset with --clobber..."
-            gh release upload "${RELEASE_TAG}" "${APK_FILE}" --repo "${GH_REPO}" --clobber
+            echo "Release already exists: ${RELEASE_TAG}"
           else
-            echo "Release does not exist. Creating release and uploading APK..."
-            gh release create "${RELEASE_TAG}" "${APK_FILE}" \
+            echo "Creating GitHub Release: ${RELEASE_TAG}"
+            gh release create "${RELEASE_TAG}" \
               --repo "${GH_REPO}" \
               --title "Za Editor ${RELEASE_TAG}" \
               --notes "Automated APK release for Za Editor ${RELEASE_TAG}" \
               --target "${GITHUB_SHA}"
           fi
 
-          echo "Verifying uploaded release asset..."
-          gh release view "${RELEASE_TAG}" --repo "${GH_REPO}" --json tagName,name,assets
+          echo "Uploading APK asset to release..."
+          gh release upload "${RELEASE_TAG}" "${APK_FILE}" \
+            --repo "${GH_REPO}" \
+            --clobber
 
-          echo "Release upload completed."
+          echo "Verifying release assets..."
+          gh release view "${RELEASE_TAG}" \
+            --repo "${GH_REPO}" \
+            --json tagName,name,assets
+
+          echo "APK uploaded to GitHub Release successfully."
