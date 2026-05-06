@@ -503,23 +503,35 @@ class MainActivity : ComponentActivity() {
 
     private fun updatePlaybackState() {
         val root = container.getChildAt(0) ?: return
-        val activePlayer = player ?: return
-        val duration = if (activePlayer.duration > 0) activePlayer.duration else currentProject?.durationMs ?: 1L
-        val position = activePlayer.currentPosition.coerceAtLeast(0L)
-        root.findViewById<TimelineView>(R.id.timelineView)?.setTimeline(duration, position)
-        root.findViewById<TextView>(R.id.currentTimeText)?.text = TimelineView.formatTime(position)
-        root.findViewById<TextView>(R.id.durationText)?.text = TimelineView.formatTime(duration)
-        root.findViewById<ImageButton>(R.id.playPauseButton)?.setImageResource(
-            if (activePlayer.isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+        val exoPlayer = player ?: return
+        val duration = if (exoPlayer.duration > 0) exoPlayer.duration else 1L
+        val position = exoPlayer.currentPosition.coerceAtLeast(0L).coerceAtMost(duration)
+
+        root.findViewById<TextView?>(R.id.currentTimeText)?.text =
+            "${formatTime(position)} / ${formatTime(duration)}"
+
+        root.findViewById<TextView?>(R.id.durationText)?.text =
+            formatTime(duration)
+
+        root.findViewById<ImageButton?>(R.id.playPauseButton)?.setImageResource(
+            if (exoPlayer.isPlaying) R.drawable.ic_pause else R.drawable.ic_play
         )
+
+        root.findViewById<TimelineView?>(R.id.timelineView)?.apply {
+            durationMs = duration
+            currentPositionMs = position
+        }
     }
 
     private fun showImportSheet() {
         val dialog = Dialog(this)
         val sheet = layoutInflater.inflate(R.layout.view_import_video_sheet, null, false)
-        sheet.findViewById<View>(R.id.import_video_action).setOnClickListener {
+        sheet.findViewById<View>(R.id.importVideoAction).setOnClickListener {
             dialog.dismiss()
             pickVideo()
+        }
+        sheet.findViewById<View?>(R.id.cancelAction)?.setOnClickListener {
+            dialog.dismiss()
         }
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         dialog.setContentView(sheet)
@@ -532,47 +544,13 @@ class MainActivity : ComponentActivity() {
 
     private fun showExportDialog() {
         AlertDialog.Builder(this)
-            .setTitle(R.string.export)
-            .setMessage(R.string.export_coming_soon)
-            .setPositiveButton(android.R.string.ok, null)
+            .setTitle("Export")
+            .setMessage("Export pipeline prepared. Final rendering coming soon.")
+            .setPositiveButton("OK", null)
             .show()
     }
 
-    private fun updatePlaybackState() {
-        val root = container.getChildAt(0) ?: return
-        val activePlayer = player ?: return
-        val duration = if (activePlayer.duration > 0) activePlayer.duration else currentProject?.durationMs ?: 1L
-        val position = activePlayer.currentPosition.coerceAtLeast(0L)
-        root.findViewById<TimelineView>(R.id.timeline_view)?.setTimeline(duration, position)
-        root.findViewById<TextView>(R.id.time_label)?.text = "${TimelineView.formatTime(position)} / ${TimelineView.formatTime(duration)}"
-        root.findViewById<ImageButton>(R.id.play_pause_button)?.setImageResource(
-            if (activePlayer.isPlaying) R.drawable.ic_pause else R.drawable.ic_play
-        )
-    }
-
-    private fun showImportSheet() {
-        val dialog = Dialog(this)
-        val sheet = layoutInflater.inflate(R.layout.view_import_video_sheet, null, false)
-        sheet.findViewById<View>(R.id.import_video_action).setOnClickListener {
-            dialog.dismiss()
-            pickVideo()
-        }
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
-        dialog.setContentView(sheet)
-        dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
-        dialog.window?.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT)
-        dialog.window?.setGravity(Gravity.BOTTOM)
-        dialog.show()
-        dialog.window?.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.WRAP_CONTENT)
-    }
-
-    private fun showExportDialog() {
-        AlertDialog.Builder(this)
-            .setTitle(R.string.export)
-            .setMessage(R.string.export_coming_soon)
-            .setPositiveButton(android.R.string.ok, null)
-            .show()
-    }
+    private fun formatTime(ms: Long): String = TimelineView.formatTime(ms)
 
     private fun pickVideo() {
         if (ActivityResultContracts.PickVisualMedia.isPhotoPickerAvailable(this)) {
