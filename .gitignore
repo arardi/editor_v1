@@ -11,3 +11,9 @@
 **/build/
 .gradle/
 local.properties
+
+# This repository intentionally avoids the Gradle Wrapper binary and typo app roots.
+gradlew
+gradlew.bat
+gradle/wrapper/
+mapp/
