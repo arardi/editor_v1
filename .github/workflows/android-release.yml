@@ -52,12 +52,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew :app:assembleDebug --no-daemon
-          else
-            gradle :app:assembleDebug --no-daemon
-          fi
+          gradle :app:assembleDebug --no-daemon
 
       - name: Prepare APK
         id: apk

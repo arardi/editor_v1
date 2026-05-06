@@ -1,0 +1,15 @@
+<resources>
+    <dimen name="spacing_4">4dp</dimen>
+    <dimen name="spacing_8">8dp</dimen>
+    <dimen name="spacing_12">12dp</dimen>
+    <dimen name="spacing_16">16dp</dimen>
+    <dimen name="spacing_20">20dp</dimen>
+    <dimen name="spacing_24">24dp</dimen>
+    <dimen name="radius_card_22">22dp</dimen>
+    <dimen name="radius_card_28">28dp</dimen>
+    <dimen name="radius_card_32">32dp</dimen>
+    <dimen name="editor_tool_width">60dp</dimen>
+    <dimen name="editor_tool_icon">24dp</dimen>
+    <dimen name="editor_toolbar_height">80dp</dimen>
+    <dimen name="timeline_height">120dp</dimen>
+</resources>

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="@dimen/editor_tool_width"
+    android:layout_height="match_parent"
+    android:background="@drawable/bg_tool_transparent"
+    android:clipToPadding="false"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center"
+    android:orientation="vertical"
+    android:paddingTop="6dp"
+    android:paddingBottom="6dp">
+
+    <ImageView
+        android:id="@+id/toolIcon"
+        android:layout_width="@dimen/editor_tool_icon"
+        android:layout_height="@dimen/editor_tool_icon"
+        android:contentDescription="@null"
+        android:scaleType="centerInside"
+        android:tint="@color/text_secondary" />
+
+    <TextView
+        android:id="@+id/toolLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:gravity="center"
+        android:textColor="@color/text_secondary"
+        android:textSize="11sp" />
+</LinearLayout>
