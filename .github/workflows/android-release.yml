@@ -1,127 +1,109 @@
-name: Android APK Build
+name: Android Debug APK Release
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - "v*"
-
-  release:
-    types:
-      - published
-
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Isi contoh v1.0.1 jika ingin upload APK ke GitHub Release dari manual run."
-        required: false
-        default: ""
+        description: "Release tag, contoh: v1.0.0-debug"
+        required: true
+        default: "v1.0.0-debug"
+        type: string
+
+  push:
+    tags:
+      - "v*"
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
-  build:
-    name: Build APK
+  build-debug-release:
+    name: Build Debug APK and Upload to Release
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
     steps:
-      - name: Checkout
+      - name: Checkout source
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.release.tag_name || github.ref }}
 
-      - name: Setup JDK 17
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: "17"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.10"
 
-      - name: Build APKs
+      - name: Check Java and Gradle version
         shell: bash
         run: |
           set -euo pipefail
-          gradle clean assembleDebug assembleRelease
+          java -version
+          gradle --version
 
-      - name: Show APK outputs
+      - name: Build debug APK
         shell: bash
         run: |
           set -euo pipefail
-          echo "APK files generated:"
-          find app/build/outputs/apk -type f -name "*.apk" -print -exec ls -lh {} \;
 
-      - name: Determine release tag
-        shell: bash
-        env:
-          INPUT_RELEASE_TAG: ${{ github.event.inputs.release_tag || '' }}
-          RELEASE_EVENT_TAG: ${{ github.event.release.tag_name || '' }}
-        run: |
-          set -euo pipefail
-
-          RELEASE_TAG=""
-
-          if [[ "${GITHUB_REF_TYPE}" == "tag" && "${GITHUB_REF_NAME}" == v* ]]; then
-            RELEASE_TAG="${GITHUB_REF_NAME}"
+          if [ -f "./gradlew" ]; then
+            chmod +x ./gradlew
+            ./gradlew :app:assembleDebug --no-daemon
+          else
+            gradle :app:assembleDebug --no-daemon
           fi
 
-          if [[ -n "${RELEASE_EVENT_TAG}" ]]; then
-            RELEASE_TAG="${RELEASE_EVENT_TAG}"
-          fi
-
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" && -n "${INPUT_RELEASE_TAG}" ]]; then
-            RELEASE_TAG="${INPUT_RELEASE_TAG}"
-          fi
-
-          echo "RELEASE_TAG=${RELEASE_TAG}" >> "$GITHUB_ENV"
-
-          echo "Event name: ${GITHUB_EVENT_NAME}"
-          echo "Ref type: ${GITHUB_REF_TYPE}"
-          echo "Ref name: ${GITHUB_REF_NAME}"
-          echo "Release tag: ${RELEASE_TAG}"
-
-      - name: Prepare APK files
+      - name: Prepare APK
+        id: apk
         shell: bash
         run: |
           set -euo pipefail
 
-          mkdir -p release-files
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.release_tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
 
-          DEBUG_APK="$(find app/build/outputs/apk/debug -type f -name "*.apk" | head -n 1 || true)"
-          RELEASE_APK="$(find app/build/outputs/apk/release -type f -name "*.apk" | head -n 1 || true)"
-
-          if [[ -z "${DEBUG_APK}" ]]; then
-            echo "::error::Debug APK not found"
+          if [ -z "$TAG" ]; then
+            echo "::error::Release tag kosong."
             exit 1
           fi
 
-          if [[ -z "${RELEASE_APK}" ]]; then
-            echo "::error::Release APK not found"
+          APK_PATH="$(find . -path "*/build/outputs/apk/debug/*.apk" -type f | head -n 1 || true)"
+
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::Debug APK tidak ditemukan."
+            echo "Daftar file APK:"
+            find . -name "*.apk" -type f || true
             exit 1
           fi
 
-          cp "${DEBUG_APK}" release-files/ZaEditor-debug.apk
-          cp "${RELEASE_APK}" release-files/ZaEditor-release.apk
+          mkdir -p dist
 
-          if [[ -n "${RELEASE_TAG}" ]]; then
-            cp "${RELEASE_APK}" "release-files/ZaEditor-${RELEASE_TAG}.apk"
-          fi
+          APK_NAME="ZaEditor-debug-${TAG}.apk"
+          APK_FILE="dist/${APK_NAME}"
 
-          echo "Prepared APK files:"
-          ls -lah release-files/
+          cp "$APK_PATH" "$APK_FILE"
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "apk_file=$APK_FILE" >> "$GITHUB_OUTPUT"
+          echo "apk_name=$APK_NAME" >> "$GITHUB_OUTPUT"
+
+          echo "APK siap:"
+          ls -lah "$APK_FILE"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ZaEditor-APK
-          path: release-files/*.apk
+          name: ${{ steps.apk.outputs.tag }}-debug-apk
+          path: ${{ steps.apk.outputs.apk_file }}
           if-no-files-found: error
 
       - name: Create or update GitHub Release
@@ -129,48 +111,40 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
+          TAG: ${{ steps.apk.outputs.tag }}
+          APK_FILE: ${{ steps.apk.outputs.apk_file }}
         run: |
           set -euo pipefail
 
-          if [[ -z "${RELEASE_TAG}" ]]; then
-            echo "No release tag detected."
-            echo "This is a normal branch build, so APK was uploaded only as Actions artifact."
-            echo "To upload APK to GitHub Release, push a tag like v1.0.4 or run workflow_dispatch with release_tag."
-            exit 0
-          fi
+          echo "Repository: $GH_REPO"
+          echo "Release tag: $TAG"
+          echo "APK file: $APK_FILE"
 
-          APK_FILE="release-files/ZaEditor-${RELEASE_TAG}.apk"
-
-          if [[ ! -f "${APK_FILE}" ]]; then
-            echo "::error::Release APK file not found: ${APK_FILE}"
+          if [ ! -f "$APK_FILE" ]; then
+            echo "::error::APK file tidak ditemukan: $APK_FILE"
             exit 1
           fi
 
-          echo "Repository: ${GH_REPO}"
-          echo "Release tag: ${RELEASE_TAG}"
-          echo "APK file: ${APK_FILE}"
-          ls -lah "${APK_FILE}"
-
           gh auth status --hostname github.com
 
-          if gh release view "${RELEASE_TAG}" --repo "${GH_REPO}" >/dev/null 2>&1; then
-            echo "Release already exists. Uploading APK asset..."
+          if gh release view "$TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            echo "Release $TAG sudah ada. Upload ulang APK..."
+            gh release upload "$TAG" "$APK_FILE" \
+              --repo "$GH_REPO" \
+              --clobber
           else
-            echo "Release does not exist. Creating release..."
-            gh release create "${RELEASE_TAG}" \
-              --repo "${GH_REPO}" \
-              --title "Za Editor ${RELEASE_TAG}" \
-              --notes "Automated APK release for Za Editor ${RELEASE_TAG}" \
-              --target "${GITHUB_SHA}"
+            echo "Membuat release $TAG..."
+            gh release create "$TAG" "$APK_FILE" \
+              --repo "$GH_REPO" \
+              --title "$TAG" \
+              --notes "Debug APK otomatis dari GitHub Actions. Commit: $GITHUB_SHA" \
+              --target "$GITHUB_SHA" \
+              --prerelease
           fi
 
-          gh release upload "${RELEASE_TAG}" "${APK_FILE}" \
-            --repo "${GH_REPO}" \
-            --clobber
-
-          echo "Verifying release assets:"
-          gh release view "${RELEASE_TAG}" \
-            --repo "${GH_REPO}" \
+          echo "Cek asset release:"
+          gh release view "$TAG" \
+            --repo "$GH_REPO" \
             --json tagName,name,assets
 
-          echo "APK uploaded to GitHub Release successfully."
+          echo "APK berhasil diupload ke GitHub Release."
